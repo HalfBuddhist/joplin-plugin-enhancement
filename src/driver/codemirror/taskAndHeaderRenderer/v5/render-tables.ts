@@ -16,6 +16,7 @@ import CodeMirror, { commands, TextMarker } from 'codemirror'
 import fromMarkdown from './table-editor'
 import { getTableHeadingRE } from '../../../../utils/regular-expressions'
 import TableEditor from './table-editor/table-editor'
+import { safeCreateMarker } from '../../../../utils/marker-collision-prevention'
 
 const tableMarkerName = 'zettlr-table-marker';
 
@@ -60,7 +61,7 @@ function writeTableToDocument (cm: CodeMirror.Editor, table: TableEditor): boole
     // line plus the amount of lines the table now has, and the character position
     // is equal to the length of the last line in the table.
     marker.clear()
-    elem.marker = cm.markText(
+    elem.marker = safeCreateMarker(cm,
         from,
         { line: from.line + md.length - 1, ch: md[md.length - 1].length },
         {
@@ -272,18 +273,17 @@ export function markdownRenderTables(cm: CodeMirror.Editor) {
             })
 
             // Apply TextMarker
-            const textMarker = cm.markText(
-                curFrom, curTo,
-                {
-                    clearOnEnter: false,
-                    replacedWith: table.domElement,
-                    inclusiveLeft: false,
-                    inclusiveRight: false,
-                    className: tableMarkerName
-                }
-            )
+            const textMarker = safeCreateMarker(cm, curFrom, curTo, {
+                clearOnEnter: false,
+                replacedWith: table.domElement,
+                inclusiveLeft: false,
+                inclusiveRight: false,
+                className: tableMarkerName
+            })
 
-            tableList.push({ table, marker: textMarker })
+            if (textMarker) {
+                tableList.push({ table, marker: textMarker })
+            }
         } catch (err) {
             console.error(`Could not instantiate table between ${firstLine} and ${lastLine}: ${err.message as string}`)
             // Error, so abort rendering.

@@ -3,6 +3,7 @@
 import { debounce } from "ts-debounce";
 import clickAndClear from "./click-and-clear";
 import {isRangeSelected} from "./cm-utils";
+import { safeCreateMarker } from "./marker-collision-prevention";
 
 interface MarkerMatch {
     match;
@@ -79,15 +80,20 @@ export default class CMInlineMarkerHelperV2 {
     private foldByMatch(doc, lineNo, match) {
         if (match) {
             const cursor = this.editor.getCursor();
-            // not fold when it is folded ?
-            this.editor.findMarksAt({line: lineNo, ch: match.index}).find((marker) => {
-                if (marker.className === this.MARKER_CLASS_NAME) {
+            const from = {line: lineNo, ch: match.index};
+            const to = {line: lineNo, ch: match.index + match[0].length};
+
+            // Clear ALL existing markers in the range, not just ones with matching class names
+            const existingMarkers = this.editor.findMarks(from, to);
+            existingMarkers.forEach(marker => {
+                // Only clear markers that are completely within our range to avoid partial overlaps
+                const markerRange = marker.find();
+                if (markerRange && 
+                    markerRange.from.line >= from.line && markerRange.from.ch >= from.ch &&
+                    markerRange.to.line <= to.line && markerRange.to.ch <= to.ch) {
                     marker.clear();
                 }
             });
-
-            const from = {line: lineNo, ch: match.index};
-            const to = {line: lineNo, ch: match.index + match[0].length};
 
             let selected = isRangeSelected(from, to, this.editor);
 
@@ -95,28 +101,26 @@ export default class CMInlineMarkerHelperV2 {
                 // not fold when the cursor is in the block
                 if (!(cursor.line === lineNo && cursor.ch >= from.ch && cursor.ch <= to.ch)) {
                     const element = this.renderer(match, from, to);
-                    const textMarker = doc.markText(
-                        from,
-                        to,
-                        {
-                            replacedWith: element,
-                            className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
-                            clearOnEnter: true,
-                            inclusiveLeft: false,
-                            inclusiveRight: false
-                        },
-                    );
+                    const textMarker = safeCreateMarker(this.editor, from, to, {
+                        replacedWith: element,
+                        className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
+                        clearOnEnter: true,
+                        inclusiveLeft: false,
+                        inclusiveRight: false
+                    });
 
-                    element.onclick = (e) => {
-                        if (e.ctrlKey || e.metaKey) {
-                            e.preventDefault();
-                            if (this.clicked) {
-                                this.clicked(match, e);
+                    if (textMarker) {
+                        element.onclick = (e) => {
+                            if (e.ctrlKey || e.metaKey) {
+                                e.preventDefault();
+                                if (this.clicked) {
+                                    this.clicked(match, e);
+                                }
+                            } else {
+                                clickAndClear(textMarker, this.editor)(e);
                             }
-                        } else {
-                            clickAndClear(textMarker, this.editor)(e);
-                        }
-                    };
+                        };
+                    }
                 }
             }
         }

@@ -2,6 +2,7 @@ import {debounce} from "ts-debounce";
 import CodeMirror, {LineHandle, TextMarker} from "codemirror";
 import clickAndClear from "./click-and-clear";
 import {findLineWidgetAtLine, isCursorOutRange, isRangeSelected} from "./cm-utils";
+import { safeCreateMarker } from "./marker-collision-prevention";
 
 export class CMBlockMarkerHelperV2 {
 
@@ -207,26 +208,24 @@ export class CMBlockMarkerHelperV2 {
                     // replace the matched range with marker element
                     const markerEl = this.spanRenderer();
                     markerEl.classList.add(this.MARKER_CLASS_NAME);
-                    const textMarker = doc.markText(
-                        from,
-                        to,
-                        {
-                            replacedWith: markerEl,
-                            handleMouseEvents: true,
-                            className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
-                            inclusiveLeft: false,
-                            inclusiveRight: false
-                        },
-                    );
+                    const textMarker = safeCreateMarker(this.editor, from, to, {
+                        replacedWith: markerEl,
+                        handleMouseEvents: true,
+                        className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
+                        inclusiveLeft: false,
+                        inclusiveRight: false
+                    });
 
                     // build the line widget just after the marker with the rendered element
-                    const wrapper = document.createElement('div');
-                    const content = blockContentLines.join('\n');
-                    const element = this.renderer(blockRange.beginMatch, blockRange.endMatch, content, from.line, to.line);
-                    if (element) {
-                        wrapper.appendChild(element);
-                        const lineWidget = this.createLineWidgetForMarker(doc, to.line, wrapper);
-                        this.setStyleAndLogical(doc, content, textMarker, markerEl, wrapper, lineWidget);
+                    if (textMarker) {
+                        const wrapper = document.createElement('div');
+                        const content = blockContentLines.join('\n');
+                        const element = this.renderer(blockRange.beginMatch, blockRange.endMatch, content, from.line, to.line);
+                        if (element) {
+                            wrapper.appendChild(element);
+                            const lineWidget = this.createLineWidgetForMarker(doc, to.line, wrapper);
+                            this.setStyleAndLogical(doc, content, textMarker, markerEl, wrapper, lineWidget);
+                        }
                     }
                 }
             } else {

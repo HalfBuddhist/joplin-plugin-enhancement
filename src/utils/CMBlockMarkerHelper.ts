@@ -2,6 +2,7 @@ import {debounce} from "ts-debounce";
 import CodeMirror, {TextMarker} from "codemirror";
 import clickAndClear from "./click-and-clear";
 import {isRangeSelected} from "./cm-utils";
+import { safeCreateMarker } from "./marker-collision-prevention";
 
 export class CMBlockMarkerHelper {
 
@@ -196,24 +197,22 @@ export class CMBlockMarkerHelper {
                 // replace the matched range with marker element
                 const markerEl = this.spanRenderer();
                 markerEl.classList.add(this.MARKER_CLASS_NAME);
-                const textMarker = doc.markText(
-                    from,
-                    to,
-                    {
-                        replacedWith: markerEl,
-                        handleMouseEvents: true,
-                        className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
-                        inclusiveLeft: false,
-                        inclusiveRight: false
-                    },
-                );
+                const textMarker = safeCreateMarker(this.editor, from, to, {
+                    replacedWith: markerEl,
+                    handleMouseEvents: true,
+                    className: this.MARKER_CLASS_NAME, // class name is not renderer in DOM
+                    inclusiveLeft: false,
+                    inclusiveRight: false
+                });
 
                 // build the line widget just after the marker with the rendered element
-                const wrapper = document.createElement('div');
-                const element = this.renderer(blockRange.beginMatch, blockRange.endMatch, blockContentLines.join('\n'), from.line, to.line);
-                wrapper.appendChild(element);
-                const lineWidget = this.createLineWidgetForMarker(doc, to.line, textMarker, wrapper);
-                this.setStyleAndLogical(doc, from, to, textMarker, markerEl, wrapper, lineWidget);
+                if (textMarker) {
+                    const wrapper = document.createElement('div');
+                    const element = this.renderer(blockRange.beginMatch, blockRange.endMatch, blockContentLines.join('\n'), from.line, to.line);
+                    wrapper.appendChild(element);
+                    const lineWidget = this.createLineWidgetForMarker(doc, to.line, textMarker, wrapper);
+                    this.setStyleAndLogical(doc, from, to, textMarker, markerEl, wrapper, lineWidget);
+                }
                 // console.log(`line ${from.line}-${to.line} is processed successfully`);
             } else {
                 // console.log(`line ${from.line}-${to.line} is not processed because of inside cursor`);
